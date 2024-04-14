@@ -93,10 +93,10 @@ def visualizar_imagens():
 def criar_dataloader():
     loader_train = DataLoader(
         data_train,
-        batch_size=32,
-        shuffle=True,
-        num_workers=4,
-        pin_memory=True
+        batch_size=32,   # Sempre que chamar o loader, vai receber 32 amostras
+        shuffle=True,    # Sempre que passar por todos os dados de treinamento (a cada época), embaralhar os dados
+        num_workers=4,   # número de threads usado para o processamento paralelo
+        pin_memory=True   
     )
 
     loader_test = DataLoader(
@@ -109,6 +109,101 @@ def criar_dataloader():
 
     return (loader_train, loader_test)
 
+# Criar um classificador linear (apenas 1 camada)
+# Module representa uma camada da rede neural, no PyTorch
+# Quando o PyTorch não disponibilizar a camada desejada, 
+# podemos implementá-la, herdando de torch.nn.Module
+
+class LinearClassifier(nn.Module):
+    
+    def __init__(self, dim_data, num_classes) -> None:
+        super().__init__()
+        self.layer = nn.Linear(
+            in_features=dim_data,     # numero de features que entra na camada
+            out_features=num_classes, # numero de features que saem da camada (classes)
+            bias=False
+        )
+
+    # Executa o forward do modelo
+    def forward(self, x): # x = batch_size x tensor da imagem 3 x 32 x 32
+        batch_size = x.shape[0]
+        x = x.view(batch_size, -1) # vetoriza o tensor
+        out = self.layer(x)
+        return out
+    
+# Definir o processo de otimização
+
+def train(train_loader, model, num_epochs, print_freq):
+
+    # activate training mode
+    model.train()
+
+    # pick device depending on GPU availability
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    print('device:', device)
+
+    # send model to device
+    model = model.to(device)
+
+    # create optimization criterion and optimizer
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(params=model.parameters(), lr=.001)
+
+    train_loader_len = len(train_loader)
+
+    # saving losses to plot later
+    losses = []
+    losses_smooth = []
+    loss_smooth = 0
+
+    # iterate num_epoch times over entire dataset
+    for epoch in range(num_epochs):
+        # iterate through mini-batches
+        for i, (x,y) in enumerate(train_loader):
+            iter_num = (epoch * train_loader_len + i + 1)
+
+            # send mini-batch data to device
+            x = x.to(device)
+            y = y.to(device)
+
+            # compute model output (forward pass) and loss
+            out = model(x)
+            loss = criterion(out, y)
+
+            if iter_num == 1:
+                loss_smooth = loss.item()
+            else:
+                # exponential movinv average of loss (easier to visualize)
+                loss_smooth = .99 * loss_smooth + .01 * loss.item()
+
+            losses.append(loss.item())
+            losses_smooth.append(loss_smooth)
+
+            # zero gradients in optimizer, perform backward pass, and update parameters
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+            #logging during training
+            if iter_num % print_freq == 0:
+                run_info = (f'epoch: { epoch + 1 }/{ num_epochs } | step: [{ i + 1 }/{ train_loader_len }] | loss_smooth: { loss_smooth } | loss: { loss }')
+                print(run_info)
+
+    # return losses for plotting
+    return losses, losses_smooth
+
+# treinar o modelo linear
+
+def treinar_modelo_linear():
+    losses, losses_smooth = train(loader_train, model_linear, num_epochs=10, print_freq=1000)
+    print('Training complete. Plotting loss curve and saving weights...')
+
+    fig = vis.visualize_losses(losses, losses_smooth)
+    plt.show()
+
+    torch.save(model_linear.state_dict(), './ckpt/model_linear_cifar10.pth')
+
 ### EXECUCAO: ###
 
 (cifar_classes, data_train, data_test) = carregar_dados()
@@ -116,3 +211,7 @@ def criar_dataloader():
 (data_train, data_test) = pre_processamento()
 # visualizar_imagens()
 (loader_train, loader_test) = criar_dataloader()
+model_linear = LinearClassifier(dim_data=3*32*32, num_classes=10)
+# print(model_linear)
+treinar_modelo_linear()
+
