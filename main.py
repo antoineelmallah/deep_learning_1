@@ -86,8 +86,9 @@ def visualizar_imagens():
     fig.suptitle('Preprocessing visualization')
     plt.show()
 
-# Criação do DataLoader (possibilita a criação de várias amostras. Qualdo chega no fim do dataset, 
-# o DataLoader embaralha o dataset e continua fornecendo amostras)
+# Criação do DataLoader (possibilita a criação de várias amostras de forma paralela. 
+# Qualdo chega no fim do dataset, o DataLoader embaralha o dataset e continua fornecendo 
+# amostras)
 
 def criar_dataloader():
     loader_train = DataLoader(
